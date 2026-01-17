@@ -20,9 +20,9 @@
     }
 }(),
 function() {
-    var e = document.getElementById("vid-68844f95aeea8b68f18e4f87"),
+    var e = document.getElementById("vid-6882b7550c09716feb1a84f4"),
         i = function(e) {
-            e.id = "vid-68844f95aeea8b68f18e4f87"
+            e.id = "vid-6882b7550c09716feb1a84f4"
         };
     e ? 0 === e.children.length && i(e) : (i(e = document.createElement("vturb-smartplayer")), "head" === document.currentScript.parentNode.tagName.toLowerCase() ? document.body.insertBefore(e, document.body.firstChild) : document.currentScript.parentNode.insertBefore(e, document.currentScript))
 }(),
@@ -30,7 +30,7 @@ function(e, i) {
     e._plt = e._plt || (i && i.timeOrigin ? i.timeOrigin + i.now() : Date.now() - 60)
 }(window, performance),
 function() {
-    var e = document.getElementById("vid-68844f95aeea8b68f18e4f87");
+    var e = document.getElementById("vid-6882b7550c09716feb1a84f4");
     e.style.maxWidth = window.innerWidth <= 450 ? "100%" : "400px", e.start = function(i) {
         e.setup ? e.setup(i) : this._setup = i
     };
