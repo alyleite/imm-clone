@@ -2738,18 +2738,12 @@
       <script>
          (function () {
             // ========= CONFIG =========
-            const TRACK_URL = "https://hooks-n8n.astrack.com.br/webhook/track_low_x9f31a"; // ajuste se necessário
+            const TRACK_URL = "https://hooks-n8n.astrack.com.br/webhook/track_low_x9f31a"; // <-- seu endpoint
+            const TRACK_KEY = "track_8KMT78bdvWif37Zr"; // opcional: ex "track_abc123" (se você validar no n8n)
             const COOKIE_DAYS = 7;
 
             // ========= HELPERS =========
-            function nowSec() {
-               return Math.floor(Date.now() / 1000);
-            }
-
-            function randomId() {
-               if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
-               return "cid_" + Math.random().toString(16).slice(2) + "_" + Date.now().toString(16);
-            }
+            function nowSec() { return Math.floor(Date.now() / 1000); }
 
             function setCookie(name, value, days) {
                const maxAge = days * 24 * 60 * 60;
@@ -2763,14 +2757,19 @@
                return m ? decodeURIComponent(m[2]) : null;
             }
 
-            function getOrCreateClickId() {
-               const LS_KEY = "track_click_id";
-               let cid = getCookie("track_cid") || localStorage.getItem(LS_KEY);
-               if (!cid) cid = randomId();
+            function randomId() {
+               if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+               return "cid_" + Math.random().toString(16).slice(2) + "_" + Date.now().toString(16);
+            }
 
-               try { localStorage.setItem(LS_KEY, cid); } catch (e) {}
-               setCookie("track_cid", cid, COOKIE_DAYS);
-               return cid;
+            // um id local só para analytics (não precisa casar compra)
+            function getOrCreateVisitId() {
+               const LS_KEY = "track_visit_id";
+               let id = getCookie("track_vid") || localStorage.getItem(LS_KEY);
+               if (!id) id = randomId();
+               try { localStorage.setItem(LS_KEY, id); } catch (e) {}
+               setCookie("track_vid", id, COOKIE_DAYS);
+               return id;
             }
 
             function getQueryParams() {
@@ -2803,13 +2802,31 @@
                return out;
             }
 
-            function buildPayload(extra) {
-               return {
+            function extractSckFromHref(href) {
+               try {
+                  const u = new URL(href, window.location.origin);
+                  return u.searchParams.get("sck");
+               } catch (e) {
+                  return null;
+               }
+            }
+
+            function findCheckoutSck() {
+               const a = document.querySelector('a[href^="https://www.ggcheckout.com/checkout/"]');
+               if (!a) return null;
+               return extractSckFromHref(a.getAttribute("href"));
+            }
+
+            async function sendTrack({ trigger, click_id, extra }) {
+               const payload = {
                   v: 1,
                   event: "track",
-                  click_id: getOrCreateClickId(),
+                  trigger,
                   ts: nowSec(),
-                  trigger: extra.trigger,
+                  // visit_id ajuda você a analisar sessões sem depender do sck
+                  visit_id: getOrCreateVisitId(),
+                  // click_id só no clique (quando existir)
+                  click_id: click_id || null,
                   page: {
                      url: location.href,
                      path: location.pathname,
@@ -2822,66 +2839,71 @@
                      user_agent: navigator.userAgent || null,
                      language: navigator.language || null,
                      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || null
-                  }
+                  },
+                  ...(extra || {})
                };
-            }
 
-            async function sendTrack(extra) {
-               const payload = buildPayload(extra);
-
-               // evita flood no load
-               if (extra.trigger === "page_load") {
-                  try {
-                     const last = Number(sessionStorage.getItem("track_last_load") || "0");
-                  if (Date.now() - last < 8000) return;
-                     sessionStorage.setItem("track_last_load", Date.now().toString());
-                  } catch (e) {}
-               }
+               const headers = { "Content-Type": "application/json" };
+               if (TRACK_KEY) headers["X-Track-Key"] = TRACK_KEY;
 
                try {
                   await fetch(TRACK_URL, {
                      method: "POST",
-                     headers: {
-                        "Content-Type": "application/json",
-                        "X-Track-Key": "track_8KMT78bdvWif37Zr"
-                     },
+                     headers,
                      body: JSON.stringify(payload),
                      keepalive: true,
-                     mode: "cors"
+                     mode: "cors",
+                     credentials: "omit"
                   });
                } catch (e) {
-                  // falha silenciosa
+                  // falha silenciosa (adblock/rede)
                }
             }
 
-            // ========= DISPAROS =========
-
-            // 1) Disparo automático no carregamento da página
+            // ========= 1) PAGE LOAD =========
+            // Não depende de sck aqui.
             sendTrack({ trigger: "page_load" });
 
-            // 2) Disparo no clique do botão (IC)
-            const CTA_SELECTORS = [
-               'a[href^="https://www.ggcheckout.com/checkout/"]',
-               'button[data-cta="checkout"]'
-            ];
+            // ========= 2) CTA CLICK (IC) =========
+            function bindCheckoutClicks() {
+               const selector = 'a[href^="https://www.ggcheckout.com/checkout/"]';
+               const links = Array.from(document.querySelectorAll(selector));
 
-            function bindCta() {
-               const els = CTA_SELECTORS.flatMap(s => Array.from(document.querySelectorAll(s)));
-               els.forEach(el => {
-                  if (el.__trackBound) return;
-                  el.__trackBound = true;
+               links.forEach((a) => {
+                  if (a.__trackBound) return;
+                  a.__trackBound = true;
 
-                  el.addEventListener("click", function () {
-                     sendTrack({ trigger: "cta_click" });
+                  a.addEventListener("click", function () {
+                     // pega o sck do próprio href (UTMify já deve ter decorado)
+                     let sck = extractSckFromHref(a.getAttribute("href"));
+
+                     // fallback: tenta achar em outro link (ou se ainda não decorou)
+                     if (!sck) sck = findCheckoutSck();
+
+                     // salva para debug/reuso
+                     if (sck) {
+                        try { localStorage.setItem("track_last_sck", sck); } catch (e) {}
+                        setCookie("track_sck", sck, COOKIE_DAYS);
+                     }
+
+                     sendTrack({
+                        trigger: "cta_click",
+                        click_id: sck || null,
+                        extra: {
+                           checkout: { href: a.getAttribute("href") }
+                        }
+                     });
                   }, { capture: true, passive: true });
                });
             }
 
-            bindCta();
-            setTimeout(bindCta, 1500);
-            setTimeout(bindCta, 3000);
+            // tenta bind agora e depois (caso o DOM seja montado depois)
+            bindCheckoutClicks();
+            setTimeout(bindCheckoutClicks, 800);
+            setTimeout(bindCheckoutClicks, 2000);
          })();
       </script>
+
 
 
 
