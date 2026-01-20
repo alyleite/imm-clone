@@ -1901,7 +1901,7 @@
                                           </div>
                                           <div id="op3-element-47XKiZPh" class="op3-element " data-op3-uuid="47XKiZPh" data-op3-gid="" data-op3-element-type="image" data-op3-element-spec="" data-op3-element-caption="Image #47XKiZPh" data-op-visibility-hidden="0" data-op-element-hidden="0" data-op3-style-id="" data-op3-has-children="0">
                                              <div class="op3-element__container op3-element-image__container">
-                                                <a class="op3-element__link op3-element-image__link op3-link" href="https://www.ggcheckout.com/checkout/v2/azUXIOAWcECzlIohtbDW" target="_self" data-op-action="link" data-op3-smooth-scroll="0">
+                                                <a class="op3-element__link op3-element-image__link op3-link" data-cta href="https://www.ggcheckout.com/checkout/v2/azUXIOAWcECzlIohtbDW" target="_self" data-op-action="link" data-op3-smooth-scroll="0">
                                                    <figure class="op3-element__wrapper op3-element-image__wrapper"><img class="op3-element__image op3-element-image__image" src="images/MOCKUPS-14-1.png" alt="" title="MOCKUPS (14) (1)" width="938" height="416" data-op3-attachment-id="44"></figure>
                                                 </a>
                                              </div>
@@ -2741,6 +2741,7 @@
             const TRACK_URL = "https://hooks-n8n.astrack.com.br/webhook/track_low_x9f31a"; // <-- seu endpoint
             const TRACK_KEY = "track_8KMT78bdvWif37Zr"; // opcional: ex "track_abc123" (se você validar no n8n)
             const COOKIE_DAYS = 7;
+            let clickLockUntil = 0;
 
             // ========= HELPERS =========
             function nowSec() { return Math.floor(Date.now() / 1000); }
@@ -2866,41 +2867,30 @@
 
             // ========= 2) CTA CLICK (IC) =========
             function bindCheckoutClicks() {
-               const selector = 'a[href^="https://www.ggcheckout.com/checkout/"]';
-               const links = Array.from(document.querySelectorAll(selector));
+               document.addEventListener("click", function (e) {
+                  // pega o <a data-cta="checkout"> mais próximo do clique
+                  const a = e.target && e.target.closest ? e.target.closest('a[data-cta="checkout"]') : null;
+                  if (!a) return;
 
-               links.forEach((a) => {
-                  if (a.__trackBound) return;
-                  a.__trackBound = true;
+                  // lock anti-duplicação
+                  const now = Date.now();
+                  if (now < clickLockUntil) return;
+                  clickLockUntil = now + 1000; // 1s
 
-                  a.addEventListener("click", function () {
-                     // pega o sck do próprio href (UTMify já deve ter decorado)
-                     let sck = extractSckFromHref(a.getAttribute("href"));
-
-                     // fallback: tenta achar em outro link (ou se ainda não decorou)
-                     if (!sck) sck = findCheckoutSck();
-
-                     // salva para debug/reuso
-                     if (sck) {
-                        try { localStorage.setItem("track_last_sck", sck); } catch (e) {}
-                        setCookie("track_sck", sck, COOKIE_DAYS);
+                  const href = a.getAttribute("href") || "";
+                  const sck = extractSckFromHref(href);
+                  sendTrack({
+                     trigger: "cta_click",
+                     click_id: sck || null,
+                     extra: {
+                        checkout: { href: a.getAttribute("href") }
                      }
-
-                     sendTrack({
-                        trigger: "cta_click",
-                        click_id: sck || null,
-                        extra: {
-                           checkout: { href: a.getAttribute("href") }
-                        }
-                     });
-                  }, { capture: true, passive: true });
-               });
+                  });
+               }, { capture: true });
             }
 
             // tenta bind agora e depois (caso o DOM seja montado depois)
             bindCheckoutClicks();
-            setTimeout(bindCheckoutClicks, 800);
-            setTimeout(bindCheckoutClicks, 2000);
          })();
       </script>
 
