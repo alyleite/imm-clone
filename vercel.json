@@ -1,4 +1,14 @@
 {
+  "redirects": [
+    {
+      "source": "/(.*)",
+      "has": [
+        { "type": "host", "value": "iamodels.vercel.app" }
+      ],
+      "destination": "https://iamastermodels.com/$1",
+      "permanent": true
+    }
+  ],
   "headers": [
     {
       "source": "/",
