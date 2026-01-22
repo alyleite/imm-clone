@@ -1249,13 +1249,13 @@
 
             // ========= 1) PAGE LOAD =========
             // Não depende de sck aqui.
-            sendTrack({ trigger: "page_load" });
+            // sendTrack({ trigger: "page_load" });
 
             // ========= 2) CTA CLICK (IC) =========
             function bindCheckoutClicks() {
                document.addEventListener("click", function (e) {
-                  // pega o <a data-cta="checkout"> mais próximo do clique
-                  const a = e.target && e.target.closest ? e.target.closest('a[data-cta="checkout"]') : null;
+                  // pega o <a data-cta> mais próximo do clique
+                  const a = e.target && e.target.closest ? e.target.closest('a[data-cta]') : null;
                   if (!a) return;
 
                   // lock anti-duplicação
